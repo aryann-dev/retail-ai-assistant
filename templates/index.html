@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retail AI Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #17140f;
+            --bg-elevated: #1f1b15;
+            --gold: #c9a876;
+            --gold-bright: #e3c896;
+            --cream: #f2ede2;
+            --muted: #948b7a;
+            --hairline: rgba(201, 168, 118, 0.22);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            background: var(--bg);
+            min-height: 100vh;
+            display: flex;
+            align-items: safe center;
+            justify-content: safe center;
+            padding: 32px 20px;
+            font-family: 'Inter', sans-serif;
+            color: var(--cream);
+            position: relative;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        /* Ambient signature: slow-moving silk light sweeping the canvas */
+        .ambient {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .ambient::before,
+        .ambient::after {
+            content: "";
+            position: absolute;
+            width: 140vmax;
+            height: 140vmax;
+            top: 50%;
+            left: 50%;
+            background: radial-gradient(ellipse 40% 22% at center, rgba(201,168,118,0.14), transparent 60%);
+            transform: translate(-50%, -50%) rotate(0deg);
+            animation: sweep 22s linear infinite;
+        }
+
+        .ambient::after {
+            background: radial-gradient(ellipse 30% 16% at center, rgba(227,200,150,0.09), transparent 60%);
+            animation: sweep 22s linear infinite reverse;
+            animation-delay: -9s;
+        }
+
+        @keyframes sweep {
+            from { transform: translate(-50%, -50%) rotate(0deg); }
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        .grain {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.035;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        .page-wrap {
+            width: 100%;
+            max-width: 920px;
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .dashboard {
+            width: 100%;
+            opacity: 0;
+            animation: rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation-delay: 0.05s;
+        }
+
+        .dash-header {
+            text-align: center;
+            margin-bottom: 18px;
+        }
+
+        .dash-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .dash-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--hairline);
+            border-radius: 2px;
+            padding: 20px;
+            min-height: 140px;
+        }
+
+        .dash-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 20px;
+            color: var(--gold-bright);
+            margin-bottom: 3px;
+        }
+
+        .dash-sub {
+            font-size: 10px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+
+        .dash-list {
+            font-size: 13px;
+            line-height: 1.9;
+            color: var(--cream);
+            font-weight: 300;
+        }
+
+        .dash-list .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            border-bottom: 1px solid var(--hairline);
+            padding: 5px 0;
+        }
+
+        .dash-list .row span:last-child {
+            color: var(--gold-bright);
+            white-space: nowrap;
+        }
+
+        .dash-empty {
+            color: var(--muted);
+            font-style: italic;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 14px;
+        }
+
+        @media (max-width: 720px) {
+            .dash-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--hairline);
+            border-radius: 2px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 30px;
+            color: var(--gold-bright);
+        }
+
+        .chart-wrap {
+            height: 90px;
+            position: relative;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 460px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .crest {
+            text-align: center;
+            margin-bottom: 34px;
+            opacity: 0;
+            animation: rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation-delay: 0.1s;
+        }
+
+        .crest .mark {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            border: 1px solid var(--hairline);
+            border-radius: 50%;
+            margin-bottom: 18px;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 22px;
+            font-style: italic;
+            color: var(--gold-bright);
+            position: relative;
+        }
+
+        .mark::before {
+            content: "";
+            position: absolute;
+            inset: -1px;
+            border-radius: 50%;
+            border: 1px solid transparent;
+            border-top-color: var(--gold-bright);
+            animation: orbit 3.5s linear infinite;
+        }
+
+        @keyframes orbit {
+            to { transform: rotate(360deg); }
+        }
+
+        h1 {
+            font-family: 'Cormorant Garamond', serif;
+            font-weight: 500;
+            font-size: 34px;
+            letter-spacing: 0.5px;
+            color: var(--cream);
+        }
+
+        .eyebrow {
+            font-size: 10px;
+            letter-spacing: 3.5px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-top: 8px;
+            font-weight: 500;
+            position: relative;
+            display: inline-block;
+        }
+
+        .eyebrow::after {
+            content: "";
+            display: block;
+            width: 0;
+            height: 1px;
+            background: var(--gold);
+            margin: 10px auto 0;
+            animation: line-grow 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation-delay: 0.6s;
+        }
+
+        @keyframes line-grow {
+            to { width: 40px; }
+        }
+
+        .panel {
+            background: var(--bg-elevated);
+            border: 1px solid var(--hairline);
+            border-radius: 2px;
+            padding: 36px 32px;
+            opacity: 0;
+            transform: translateY(14px);
+            animation: rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation-delay: 0.3s;
+        }
+
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(14px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        label {
+            display: block;
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 9px;
+            font-weight: 500;
+        }
+
+        .field {
+            margin-bottom: 22px;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 13px 14px;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--hairline);
+            color: var(--cream);
+            font-size: 15px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            border-radius: 0;
+            transition: border-color 0.25s ease;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        select {
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c9a876'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 4px center;
+        }
+
+        select option {
+            background: var(--bg-elevated);
+            color: var(--cream);
+        }
+
+        input::placeholder {
+            color: var(--muted);
+        }
+
+        select:focus, input:focus {
+            border-bottom-color: var(--gold-bright);
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            margin-top: 6px;
+            background: transparent;
+            border: 1px solid var(--gold);
+            color: var(--gold-bright);
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 500;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: color 0.3s ease, letter-spacing 0.3s ease, border-color 0.3s ease;
+        }
+
+        button::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: var(--gold);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
+            z-index: -1;
+        }
+
+        button:hover {
+            color: #17140f;
+            letter-spacing: 3.5px;
+        }
+
+        button:hover::before {
+            transform: scaleX(1);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button.sending {
+            pointer-events: none;
+            color: var(--muted);
+            border-color: var(--hairline);
+            letter-spacing: 3px;
+        }
+
+        #answer {
+            margin-top: 26px;
+            padding-top: 22px;
+            border-top: 1px solid var(--hairline);
+            color: var(--cream);
+            font-size: 14.5px;
+            line-height: 1.85;
+            white-space: pre-wrap;
+            font-weight: 300;
+            display: none;
+        }
+
+        #answer.visible {
+            display: block;
+            animation: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #answer.loading {
+            color: var(--muted);
+            font-style: italic;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 17px;
+        }
+
+        .dots span {
+            display: inline-block;
+            animation: blink 1.4s infinite;
+        }
+        .dots span:nth-child(2) { animation-delay: 0.2s; }
+        .dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes blink {
+            0%, 80%, 100% { opacity: 0.2; }
+            40% { opacity: 1; }
+        }
+
+        @keyframes reveal {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .ambient::before, .ambient::after, .mark::before,
+            .crest, .panel, .eyebrow::after, #answer.visible, .dots span {
+                animation: none !important;
+                opacity: 1 !important;
+                transform: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient"></div>
+    <div class="grain"></div>
+
+    <div class="page-wrap">
+
+        <div class="dashboard" id="dashboard">
+            <div class="dash-header">
+                <div class="eyebrow" style="margin:0;">Inventory Insights</div>
+            </div>
+            <div class="dash-grid">
+                <div class="dash-card">
+                    <div class="dash-title">Deadstock</div>
+                    <div class="dash-sub">No sales in 90 days</div>
+                    <div class="dash-list" id="deadstockList">Loading…</div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-title">Overstock</div>
+                    <div class="dash-sub">60+ days of stock left</div>
+                    <div class="dash-list" id="overstockList">Loading…</div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-title">Reorder Soon</div>
+                    <div class="dash-sub">7 days or less remaining</div>
+                    <div class="dash-list" id="reorderList">Loading…</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard" id="salesDashboard">
+            <div class="dash-header">
+                <div class="eyebrow" style="margin:0;">Sales & Revenue</div>
+            </div>
+            <div class="stat-row">
+                <div class="stat-card">
+                    <div class="stat-label">Total Revenue (90 days)</div>
+                    <div class="stat-value" id="totalRevenue">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Units Sold (90 days)</div>
+                    <div class="stat-value" id="totalUnits">—</div>
+                </div>
+            </div>
+            <div class="dash-grid">
+                <div class="dash-card">
+                    <div class="dash-title">Top Products</div>
+                    <div class="dash-sub">By revenue</div>
+                    <div class="dash-list" id="topProductsList">Loading…</div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-title">By Category</div>
+                    <div class="dash-sub">Revenue share</div>
+                    <div class="dash-list" id="categoryList">Loading…</div>
+                </div>
+                <div class="dash-card">
+                    <div class="dash-title">Revenue Trend</div>
+                    <div class="dash-sub">Last 30 days</div>
+                    <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+    <div class="container">
+        <div class="crest">
+            <div class="mark">AI</div>
+            <h1>Retail AI Assistant</h1>
+            <div class="eyebrow">Product, Sales &amp; Inventory Assistant</div>
+        </div>
+
+        <div class="panel">
+            <div class="field">
+                <label for="business">Boutique</label>
+                <select id="business">
+                    <option value="business1">Business 1</option>
+                    <option value="business2">Business 2</option>
+                    <option value="business3">Business 3</option>
+                    <option value="business4">Business 4</option>
+                    <option value="business5">Business 5</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="question">Your Request</label>
+                <input type="text" id="question" placeholder="What are you looking for today?">
+            </div>
+
+            <button id="sendBtn" onclick="sendMessage()">Ask the Assistant</button>
+
+            <p id="answer"></p>
+        </div>
+    </div>
+
+    <script>
+        function sendMessage() {
+            const business = document.getElementById("business").value;
+            const question = document.getElementById("question").value;
+            const answerBox = document.getElementById("answer");
+            const btn = document.getElementById("sendBtn");
+
+            if (!question.trim()) return;
+
+            btn.classList.add("sending");
+            btn.innerHTML = "Consulting";
+
+            answerBox.className = "visible loading";
+            answerBox.innerHTML = 'Consulting the collection<span class="dots"><span>.</span><span>.</span><span>.</span></span>';
+
+            fetch("/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: question, business: business })
+            })
+            .then(res => res.json())
+            .then(data => {
+                answerBox.className = "visible";
+                answerBox.innerText = data.reply;
+            })
+            .catch(err => {
+                answerBox.className = "visible";
+                answerBox.innerText = "Something went wrong. Please try again.";
+            })
+            .finally(() => {
+                btn.classList.remove("sending");
+                btn.innerHTML = "Ask the Assistant";
+            });
+        }
+
+        document.getElementById("question").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") sendMessage();
+        });
+
+        function renderList(elementId, items, valueKey, valueLabel) {
+            const el = document.getElementById(elementId);
+            if (!items || items.length === 0) {
+                el.innerHTML = '<div class="dash-empty">Nothing to show</div>';
+                return;
+            }
+            el.innerHTML = items.map(item => {
+                let value = item[valueKey];
+                if (valueLabel) value = value + valueLabel;
+                return `<div class="row"><span>${item.name}</span><span>${value}</span></div>`;
+            }).join("");
+        }
+
+        fetch("/dashboard-data")
+            .then(res => res.json())
+            .then(data => {
+                renderList("deadstockList", data.deadstock, "stock", " units");
+                renderList("overstockList", data.overstock, "days_to_sell", " days left");
+                renderList("reorderList", data.reorder, "days_left", " days left");
+            })
+            .catch(err => {
+                ["deadstockList", "overstockList", "reorderList"].forEach(id => {
+                    document.getElementById(id).innerHTML = '<div class="dash-empty">Could not load</div>';
+                });
+            });
+
+        function formatINR(num) {
+            return "₹" + Number(num).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+        }
+
+        fetch("/sales-data")
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("totalRevenue").innerText = formatINR(data.total_revenue);
+                document.getElementById("totalUnits").innerText = data.total_units;
+
+                const topEl = document.getElementById("topProductsList");
+                if (data.top_products && data.top_products.length) {
+                    topEl.innerHTML = data.top_products.map(p =>
+                        `<div class="row"><span>${p.name}</span><span>${formatINR(p.revenue)}</span></div>`
+                    ).join("");
+                } else {
+                    topEl.innerHTML = '<div class="dash-empty">Nothing to show</div>';
+                }
+
+                const catEl = document.getElementById("categoryList");
+                if (data.category_revenue && data.category_revenue.length) {
+                    catEl.innerHTML = data.category_revenue.map(c =>
+                        `<div class="row"><span>${c.name}</span><span>${formatINR(c.revenue)}</span></div>`
+                    ).join("");
+                } else {
+                    catEl.innerHTML = '<div class="dash-empty">Nothing to show</div>';
+                }
+
+                if (data.daily_trend && data.daily_trend.length) {
+                    const ctx = document.getElementById("trendChart").getContext("2d");
+                    new Chart(ctx, {
+                        type: "line",
+                        data: {
+                            labels: data.daily_trend.map(d => d.date.slice(5)),
+                            datasets: [{
+                                data: data.daily_trend.map(d => d.revenue),
+                                borderColor: "#c9a876",
+                                backgroundColor: "rgba(201,168,118,0.12)",
+                                borderWidth: 1.5,
+                                pointRadius: 0,
+                                tension: 0.35,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { display: false },
+                                y: { display: false }
+                            }
+                        }
+                    });
+                }
+            })
+            .catch(err => {
+                document.getElementById("totalRevenue").innerText = "—";
+                document.getElementById("totalUnits").innerText = "—";
+            });
+    </script>
+
+</body>
+</html>
