@@ -1,31 +1,12 @@
-import pandas as pd
 import random
 from datetime import datetime, timedelta
 
-inventory_df = pd.read_csv("INVENTORY.csv")
-catalog_price = {}
+import db
 
-# Read prices from all category CSVs and map them by product_name
-CATEGORY_FILES = [
-    "ACCESSORIES.csv", "BAGS_BACKPACKS.csv", "BEAUTY.csv", "BLAZERS.csv",
-    "HOODIES_SWEATSHIRTS.csv", "JACKETS.csv", "JEANS.csv", "LINEN.csv",
-    "OVERSHIRTS.csv", "PERFUMES.csv", "POLO SHIRTS.csv", "SHIRTS.csv",
-    "SHOES.csv", "SHORTS.csv", "SUITS.csv", "SWEATERS_CARDIGANS.csv", "TROUSERS.csv"
-]
-
-for filename in CATEGORY_FILES:
-    try:
-        df = pd.read_csv(filename)
-        for _, row in df.iterrows():
-            name = str(row.get("product_name", "")).strip().upper()
-            price_str = str(row.get("price", "0"))
-            price_num = "".join(c for c in price_str if c.isdigit() or c == ".")
-            try:
-                catalog_price[name] = float(price_num) if price_num else 0.0
-            except ValueError:
-                catalog_price[name] = 0.0
-    except FileNotFoundError:
-        pass
+products = db.get_products()
+if products.empty:
+    print("No products in the database. Run migrate_csv_to_db.py first.")
+    raise SystemExit(1)
 
 DAYS = 90
 today = datetime.today()
@@ -33,9 +14,9 @@ today = datetime.today()
 # Some products sell fast and some are slow or dead, so the test data looks realistic
 rows = []
 
-for _, product in inventory_df.iterrows():
-    product_name = product["product_name"]
-    category = product["category"]
+for _, product in products.iterrows():
+    product_id = int(product["id"])
+    price = float(product["price"])
 
     # Give each product a random "selling speed"
     speed_type = random.choices(
@@ -56,18 +37,14 @@ for _, product in inventory_df.iterrows():
             qty_sold = random.choices([0, 1, 2, 3, 4], weights=[30, 30, 20, 15, 5])[0]
 
         if qty_sold > 0:
-            price = catalog_price.get(product_name, 0.0)
-            rows.append({
-                "date": date.strftime("%Y-%m-%d"),
-                "product_name": product_name,
-                "category": category,
-                "qty_sold": qty_sold,
-                "price": price,
-                "revenue": round(qty_sold * price, 2)
-            })
+            rows.append((date.date(), product_id, qty_sold, price, round(qty_sold * price, 2)))
 
-sales_df = pd.DataFrame(rows)
-sales_df.to_csv("SALES.csv", index=False)
+with db.connect() as conn:
+    with conn.transaction():
+        conn.execute("DELETE FROM sales")
+        with conn.cursor().copy("COPY sales (sale_date, product_id, qty_sold, price, revenue) FROM STDIN") as copy:
+            for row in rows:
+                copy.write_row(row)
 
-print(f"Total sales records generated: {len(sales_df)}")
-print("SALES.csv created successfully.")
+print(f"Total sales records generated: {len(rows)}")
+print("Sales table created successfully.")

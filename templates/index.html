@@ -107,6 +107,22 @@
             margin-bottom: 18px;
         }
 
+        .stock-link {
+            display: inline-block;
+            margin-top: 12px;
+            color: var(--gold-bright);
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-decoration: none;
+            border-bottom: 1px solid var(--hairline);
+            padding-bottom: 2px;
+        }
+
+        .stock-link:hover {
+            border-bottom-color: var(--gold-bright);
+        }
+
         .dash-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -458,6 +474,7 @@
         <div class="dashboard" id="dashboard">
             <div class="dash-header">
                 <div class="eyebrow" style="margin:0;">Inventory Insights</div>
+                <div><a class="stock-link" href="/stock">View full stock &rarr;</a></div>
             </div>
             <div class="dash-grid">
                 <div class="dash-card">

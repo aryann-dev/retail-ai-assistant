@@ -2,8 +2,9 @@ from groq import Groq
 from dotenv import load_dotenv
 import os
 import chromadb
-import pandas as pd
 from sentence_transformers import SentenceTransformer
+
+import db
 
 load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -12,33 +13,11 @@ embed_model = SentenceTransformer('BAAI/bge-m3')
 chroma_client = chromadb.PersistentClient(path="./chroma_db")
 collection = chroma_client.get_or_create_collection(name="retail_products")
 
-# Load the inventory once and keep it in memory
-inventory_df = pd.read_csv("INVENTORY.csv")
-catalog_price_lookup = {}
-_CATEGORY_FILES_FOR_PRICE = [
-    "ACCESSORIES.csv", "BAGS_BACKPACKS.csv", "BEAUTY.csv", "BLAZERS.csv",
-    "HOODIES_SWEATSHIRTS.csv", "JACKETS.csv", "JEANS.csv", "LINEN.csv",
-    "OVERSHIRTS.csv", "PERFUMES.csv", "POLO SHIRTS.csv", "SHIRTS.csv",
-    "SHOES.csv", "SHORTS.csv", "SUITS.csv", "SWEATERS_CARDIGANS.csv", "TROUSERS.csv"
-]
-for _f in _CATEGORY_FILES_FOR_PRICE:
-    try:
-        _df = pd.read_csv(_f)
-        for _, _row in _df.iterrows():
-            _name = str(_row.get("product_name", "")).strip().upper()
-            _price_str = str(_row.get("price", "0"))
-            _price_num = "".join(c for c in _price_str if c.isdigit() or c == ".")
-            catalog_price_lookup[_name] = float(_price_num) if _price_num else 0.0
-    except FileNotFoundError:
-        pass
-inventory_df["product_name"] = inventory_df["product_name"].str.strip().str.upper()
-
-def get_stock_line(product_name):
-    match = inventory_df[inventory_df["product_name"] == product_name.strip().upper()]
-    if match.empty:
+def get_stock_line(product_id):
+    row = db.get_stock(product_id)
+    if row is None:
         return None
-    stock = int(match.iloc[0]["current_stock"])
-    reorder = int(match.iloc[0]["reorder_level"])
+    stock, reorder = row
     if stock == 0:
         return "OUT OF STOCK"
     elif stock <= reorder:
@@ -61,8 +40,7 @@ def get_relevant_products(user_message, top_k=15):
     metas = results["metadatas"][0]
 
     for doc, meta in zip(docs, metas):
-        name = meta.get("name", "")
-        stock_line = get_stock_line(name)
+        stock_line = get_stock_line(meta.get("product_id"))
         if stock_line:
             lines.append(f"- {doc}, {stock_line}")
         else:
@@ -116,15 +94,15 @@ def get_ai_reply(user_message):
     )
     return response.choices[0].message.content
 def get_dashboard_data():
-    sales_df = pd.read_csv("SALES.csv")
-    inv_df = pd.read_csv("INVENTORY.csv")
+    sales_df = db.get_sales()
+    inv_df = db.get_products()
 
-    sales_summary = sales_df.groupby("product_name").agg(
+    sales_summary = sales_df.groupby("product_id").agg(
         total_sold=("qty_sold", "sum")
     ).reset_index()
     sales_summary["avg_daily_sale"] = sales_summary["total_sold"] / 90
 
-    merged = inv_df.merge(sales_summary, on="product_name", how="left")
+    merged = inv_df.rename(columns={"id": "product_id"}).merge(sales_summary, on="product_id", how="left")
     merged["total_sold"] = merged["total_sold"].fillna(0)
     merged["avg_daily_sale"] = merged["avg_daily_sale"].fillna(0)
 
@@ -133,7 +111,7 @@ def get_dashboard_data():
     reorder = []
 
     for _, row in merged.iterrows():
-        name = row["product_name"]
+        name = row["name"]
         stock = row["current_stock"]
         avg_sale = row["avg_daily_sale"]
         total_sold = row["total_sold"]
@@ -153,7 +131,7 @@ def get_dashboard_data():
         "reorder": reorder[:10]
     }
 def get_sales_analytics():
-    sales_df = pd.read_csv("SALES.csv")
+    sales_df = db.get_sales()
 
     total_revenue = round(sales_df["revenue"].sum(), 2)
     total_units = int(sales_df["qty_sold"].sum())
@@ -204,20 +182,21 @@ def get_sales_analytics():
         "daily_trend": daily_trend
     }
 import re
-from datetime import datetime
 
 def find_product_match(product_query):
-    """Find the catalog product that best matches the name the user typed."""
+    """Find the catalog product that best matches the name the user typed.
+    Returns (product_id, name) or None."""
     query_upper = product_query.strip().upper()
-    names = inventory_df["product_name"].tolist()
+    products = db.get_products()
+    candidates = list(zip(products["id"].astype(int), products["name"]))
 
     # Try an exact match first
-    for name in names:
+    for pid, name in candidates:
         if name == query_upper:
-            return name
+            return pid, name
 
     # Partial match (e.g. "shirt" matches "TEXTURED SHIRT")
-    matches = [name for name in names if query_upper in name or name in query_upper]
+    matches = [(pid, name) for pid, name in candidates if query_upper in name or name in query_upper]
     if matches:
         return matches[0]
 
@@ -225,40 +204,15 @@ def find_product_match(product_query):
 
 
 def record_sale(product_name, qty):
-    """Record a sale: reduce the stock and append an entry to SALES.csv."""
-    global inventory_df
-
-    matched_name = find_product_match(product_name)
-    if not matched_name:
+    """Record a sale: reduce the stock and add an entry to the sales table."""
+    match = find_product_match(product_name)
+    if not match:
         return {"success": False, "message": f"No product named '{product_name}' was found in the catalog."}
+    product_id, matched_name = match
 
-    row_idx = inventory_df[inventory_df["product_name"] == matched_name].index[0]
-    current_stock = int(inventory_df.at[row_idx, "current_stock"])
-
-    if qty > current_stock:
+    ok, current_stock, price, revenue = db.record_sale(product_id, qty)
+    if not ok:
         return {"success": False, "message": f"Only {current_stock} units of '{matched_name}' are in stock, so {qty} cannot be sold."}
-
-    # Reduce the stock
-    inventory_df.at[row_idx, "current_stock"] = current_stock - qty
-    inventory_df.to_csv("INVENTORY.csv", index=False)
-
-    # Append a new record to SALES.csv
-    category = inventory_df.at[row_idx, "category"]
-    price = catalog_price_lookup.get(matched_name, 0.0)
-    revenue = round(qty * price, 2)
-
-    new_sale = pd.DataFrame([{
-        "date": datetime.today().strftime("%Y-%m-%d"),
-        "product_name": matched_name,
-        "category": category,
-        "qty_sold": qty,
-        "price": price,
-        "revenue": revenue
-    }])
-
-    sales_df = pd.read_csv("SALES.csv")
-    sales_df = pd.concat([sales_df, new_sale], ignore_index=True)
-    sales_df.to_csv("SALES.csv", index=False)
 
     new_stock = current_stock - qty
     return {
@@ -277,3 +231,34 @@ def try_parse_sale_message(user_message):
         product_text = match.group(2)
         return qty, product_text
     return None
+
+
+def get_stock_overview():
+    """Every product with its stock level and status, lowest stock first."""
+    products = db.get_products()
+    items = []
+    for _, row in products.iterrows():
+        stock = int(row["current_stock"])
+        reorder = int(row["reorder_level"])
+        if stock == 0:
+            status = "out"
+        elif stock <= reorder:
+            status = "low"
+        else:
+            status = "ok"
+        items.append({
+            "id": int(row["id"]),
+            "name": row["name"],
+            "category": row["category"],
+            "price": float(row["price"]),
+            "stock": stock,
+            "reorder_level": reorder,
+            "status": status,
+        })
+    items.sort(key=lambda p: (p["stock"], p["name"]))
+    return {
+        "total": len(items),
+        "low": sum(1 for p in items if p["status"] == "low"),
+        "out": sum(1 for p in items if p["status"] == "out"),
+        "products": items,
+    }

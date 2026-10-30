@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Overview · Retail AI Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #17140f;
+            --bg-elevated: #1f1b15;
+            --gold: #c9a876;
+            --gold-bright: #e3c896;
+            --cream: #f2ede2;
+            --muted: #948b7a;
+            --hairline: rgba(201, 168, 118, 0.22);
+            --ok: #8fbf8a;
+            --low: #e0b45c;
+            --out: #e07a6a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--cream);
+            font-family: 'Inter', system-ui, sans-serif;
+            padding: 32px 20px 48px;
+            min-height: 100vh;
+        }
+
+        .wrap { max-width: 920px; margin: 0 auto; }
+
+        .top {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 26px;
+        }
+
+        h1 {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-weight: 500;
+            font-size: 32px;
+        }
+
+        a.back {
+            color: var(--gold-bright);
+            text-decoration: none;
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--hairline);
+            padding-bottom: 2px;
+        }
+        a.back:hover { border-bottom-color: var(--gold-bright); }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        .stat {
+            background: var(--bg-elevated);
+            border: 1px solid var(--hairline);
+            border-radius: 2px;
+            padding: 16px 18px;
+            cursor: pointer;
+            text-align: left;
+            color: inherit;
+            font: inherit;
+        }
+        .stat.active { border-color: var(--gold); }
+        .stat-label {
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+        .stat-value {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 30px;
+            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat.low .stat-value { color: var(--low); }
+        .stat.out .stat-value { color: var(--out); }
+
+        .filters {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .filters input, .filters select {
+            flex: 1 1 200px;
+            padding: 11px 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--hairline);
+            border-radius: 2px;
+            color: var(--cream);
+            font: inherit;
+            font-size: 14px;
+            outline: none;
+        }
+        .filters input:focus, .filters select:focus { border-color: var(--gold); }
+        .filters select option { background: var(--bg-elevated); }
+
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--hairline);
+            border-radius: 2px;
+            background: var(--bg-elevated);
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        th, td { padding: 10px 14px; text-align: left; white-space: nowrap; }
+        th {
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-weight: 500;
+            border-bottom: 1px solid var(--hairline);
+            position: sticky;
+            top: 0;
+            background: var(--bg-elevated);
+        }
+        td { border-bottom: 1px solid rgba(201, 168, 118, 0.08); }
+        td.name { white-space: normal; min-width: 200px; }
+        td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+        tr:last-child td { border-bottom: none; }
+
+        .badge {
+            display: inline-block;
+            font-size: 11px;
+            padding: 3px 9px;
+            border-radius: 999px;
+            border: 1px solid currentColor;
+        }
+        .badge.ok { color: var(--ok); }
+        .badge.low { color: var(--low); }
+        .badge.out { color: var(--out); }
+
+        .note { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
+
+        @media (max-width: 560px) {
+            .stats { grid-template-columns: 1fr; }
+            th.category, td.category { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="top">
+            <h1>Stock Overview</h1>
+            <a class="back" href="/">← Back to assistant</a>
+        </div>
+
+        <div class="stats">
+            <button class="stat active" data-filter="all">
+                <div class="stat-label">Total products</div>
+                <div class="stat-value" id="totalCount">—</div>
+            </button>
+            <button class="stat low" data-filter="low">
+                <div class="stat-label">Low stock</div>
+                <div class="stat-value" id="lowCount">—</div>
+            </button>
+            <button class="stat out" data-filter="out">
+                <div class="stat-label">Out of stock</div>
+                <div class="stat-value" id="outCount">—</div>
+            </button>
+        </div>
+
+        <div class="filters">
+            <input type="search" id="search" placeholder="Search products…" aria-label="Search products">
+            <select id="category" aria-label="Filter by category">
+                <option value="">All categories</option>
+            </select>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th class="category">Category</th>
+                        <th class="num">Price</th>
+                        <th class="num">In stock</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="rows">
+                    <tr><td colspan="5">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="note" id="note"></p>
+    </div>
+
+    <script>
+        const STATUS_LABEL = { ok: "In stock", low: "Low stock", out: "Out of stock" };
+        let allProducts = [];
+        let statusFilter = "all";
+
+        function formatINR(num) {
+            return "₹" + Number(num).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+        }
+
+        function cell(text, className) {
+            const td = document.createElement("td");
+            td.textContent = text;
+            if (className) td.className = className;
+            return td;
+        }
+
+        function render() {
+            const query = document.getElementById("search").value.trim().toUpperCase();
+            const category = document.getElementById("category").value;
+            const shown = allProducts.filter(p =>
+                (statusFilter === "all" || p.status === statusFilter) &&
+                (!category || p.category === category) &&
+                (!query || p.name.includes(query))
+            );
+
+            const tbody = document.getElementById("rows");
+            tbody.replaceChildren();
+            if (!shown.length) {
+                const tr = document.createElement("tr");
+                tr.appendChild(cell("No products match these filters.")).colSpan = 5;
+                tbody.appendChild(tr);
+            }
+            for (const p of shown) {
+                const tr = document.createElement("tr");
+                tr.appendChild(cell(p.name, "name"));
+                tr.appendChild(cell(p.category, "category"));
+                tr.appendChild(cell(formatINR(p.price), "num"));
+                tr.appendChild(cell(p.stock, "num"));
+                const statusTd = document.createElement("td");
+                const badge = document.createElement("span");
+                badge.className = "badge " + p.status;
+                badge.textContent = STATUS_LABEL[p.status];
+                statusTd.appendChild(badge);
+                tr.appendChild(statusTd);
+                tbody.appendChild(tr);
+            }
+            document.getElementById("note").textContent =
+                `Showing ${shown.length} of ${allProducts.length} products, lowest stock first. ` +
+                `"Low stock" means at or below the reorder level.`;
+        }
+
+        document.querySelectorAll(".stat").forEach(btn => {
+            btn.addEventListener("click", () => {
+                statusFilter = btn.dataset.filter;
+                document.querySelectorAll(".stat").forEach(b => b.classList.toggle("active", b === btn));
+                render();
+            });
+        });
+        document.getElementById("search").addEventListener("input", render);
+        document.getElementById("category").addEventListener("change", render);
+
+        fetch("/stock-data")
+            .then(res => res.json())
+            .then(data => {
+                allProducts = data.products;
+                document.getElementById("totalCount").textContent = data.total;
+                document.getElementById("lowCount").textContent = data.low;
+                document.getElementById("outCount").textContent = data.out;
+
+                const select = document.getElementById("category");
+                [...new Set(allProducts.map(p => p.category))].sort().forEach(c => {
+                    const opt = document.createElement("option");
+                    opt.value = c;
+                    opt.textContent = c;
+                    select.appendChild(opt);
+                });
+                render();
+            })
+            .catch(() => {
+                document.getElementById("rows").innerHTML = '<tr><td colspan="5">Could not load stock data.</td></tr>';
+            });
+    </script>
+</body>
+</html>

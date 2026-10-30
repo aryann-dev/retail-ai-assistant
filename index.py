@@ -1,26 +1,12 @@
-import pandas as pd
 import chromadb
 from sentence_transformers import SentenceTransformer
 
-CATEGORY_FILES = {
-    "ACCESSORIES.csv": "accessories",
-    "BAGS_BACKPACKS.csv": "bags",
-    "BEAUTY.csv": "beauty",
-    "BLAZERS.csv": "blazers",
-    "HOODIES_SWEATSHIRTS.csv": "hoodies",
-    "JACKETS.csv": "jackets",
-    "JEANS.csv": "jeans",
-    "LINEN.csv": "linen",
-    "OVERSHIRTS.csv": "overshirts",
-    "PERFUMES.csv": "perfumes",
-    "POLO SHIRTS.csv": "polo shirts",
-    "SHIRTS.csv": "shirts",
-    "SHOES.csv": "shoes",
-    "SHORTS.csv": "shorts",
-    "SUITS.csv": "suits",
-    "SWEATERS_CARDIGANS.csv": "sweaters",
-    "TROUSERS.csv": "trousers",
-}
+import db
+
+products = db.get_products()
+if products.empty:
+    print("No products in the database. Run migrate_csv_to_db.py first.")
+    raise SystemExit(1)
 
 print("Loading embedding model...")
 model = SentenceTransformer('BAAI/bge-m3')
@@ -38,33 +24,20 @@ collection = chroma_client.get_or_create_collection(name="retail_products")
 documents = []
 metadatas = []
 ids = []
-counter = 0
 
-for filename, category in CATEGORY_FILES.items():
-    try:
-        df = pd.read_csv(filename)
-        seen = set()
-        for _, row in df.iterrows():
-            name = str(row.get("product_name", "N/A"))
-            price = str(row.get("price", "N/A"))
-            details = str(row.get("details", ""))
-            
-            key = f"{name}-{price}"
-            if key in seen:
-                continue
-            seen.add(key)
+for _, row in products.iterrows():
+    name = row["name"]
+    category = row["category"]
+    price = f"₹ {row['price']:,.2f}"
+    details = row["details"]
 
-            text = f"{name}, category: {category}, price: {price}"
-            if details and details != "nan":
-                text += f", details: {details[:150]}"
+    text = f"{name}, category: {category}, price: {price}"
+    if isinstance(details, str) and details:
+        text += f", details: {details[:150]}"
 
-            documents.append(text)
-            metadatas.append({"name": name, "price": price, "category": category})
-            ids.append(f"id_{counter}")
-            counter += 1
-        print(f"Loaded {filename}")
-    except FileNotFoundError:
-        print(f"Skipped {filename} (not found)")
+    documents.append(text)
+    metadatas.append({"product_id": int(row["id"]), "name": name, "price": price, "category": category})
+    ids.append(f"product_{int(row['id'])}")
 
 print(f"Total products: {len(documents)}")
 print("Building embeddings and storing in ChromaDB... (this may take a minute)")

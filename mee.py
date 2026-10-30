@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template
 from groq import Groq
 from dotenv import load_dotenv
 import os
-from business import get_ai_reply, get_dashboard_data, get_sales_analytics
+from business import get_ai_reply, get_dashboard_data, get_sales_analytics, get_stock_overview
 
 load_dotenv()
 
@@ -27,6 +27,15 @@ def sales_data():
 @app.route("/dashboard-data")
 def dashboard_data():
     data = get_dashboard_data()
+    return jsonify(data)
+
+@app.route("/stock")
+def stock_page():
+    return render_template("stock.html")
+
+@app.route("/stock-data")
+def stock_data():
+    data = get_stock_overview()
     return jsonify(data)
 
 if __name__ == "__main__":
