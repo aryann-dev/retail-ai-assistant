@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS products (
     category    TEXT NOT NULL,
     price       NUMERIC(10, 2) NOT NULL DEFAULT 0,
     details     TEXT,
-    UNIQUE (name, price)
+    link        TEXT NOT NULL UNIQUE   -- Zara product URL; identifies a product uniquely
 );
 
 CREATE TABLE IF NOT EXISTS inventory (

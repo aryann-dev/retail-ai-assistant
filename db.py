@@ -61,7 +61,9 @@ def parse_price(price_str):
 
 
 def read_catalog_csvs():
-    """Read the Kaggle category CSVs into one list of unique products (by name and price)."""
+    """Read the Kaggle category CSVs into one list of unique products.
+    A product is identified by its Zara link: different products can share a name and price,
+    and the same product can appear in two category files (the first category is kept)."""
     products = []
     seen = set()
     for filename, category in CATEGORY_FILES.items():
@@ -71,17 +73,17 @@ def read_catalog_csvs():
             print(f"Skipped {filename} (not found)")
             continue
         for _, row in df.iterrows():
-            name = str(row.get("product_name", "N/A")).strip().upper()
-            price = parse_price(row.get("price", "0"))
-            if (name, price) in seen:
+            link = str(row.get("link", "")).strip()
+            if link in seen:
                 continue
-            seen.add((name, price))
+            seen.add(link)
             details = str(row.get("details", ""))
             products.append({
-                "name": name,
+                "name": str(row.get("product_name", "N/A")).strip().upper(),
                 "category": category,
-                "price": price,
+                "price": parse_price(row.get("price", "0")),
                 "details": None if details == "nan" else details,
+                "link": link,
             })
         print(f"Loaded {filename}")
     return products
