@@ -2,6 +2,7 @@ from groq import Groq
 from dotenv import load_dotenv
 import os
 import chromadb
+import pandas as pd
 from sentence_transformers import SentenceTransformer
 
 import db
@@ -97,10 +98,18 @@ def get_dashboard_data():
     sales_df = db.get_sales()
     inv_df = db.get_products()
 
+    # Days covered by the sales data: first to last sale, inclusive
+    # (days with zero sales in between are counted too)
+    if sales_df.empty:
+        days = 1
+    else:
+        dates = pd.to_datetime(sales_df["date"])
+        days = (dates.max() - dates.min()).days + 1
+
     sales_summary = sales_df.groupby("product_id").agg(
         total_sold=("qty_sold", "sum")
     ).reset_index()
-    sales_summary["avg_daily_sale"] = sales_summary["total_sold"] / 90
+    sales_summary["avg_daily_sale"] = sales_summary["total_sold"] / days
 
     merged = inv_df.rename(columns={"id": "product_id"}).merge(sales_summary, on="product_id", how="left")
     merged["total_sold"] = merged["total_sold"].fillna(0)

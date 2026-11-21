@@ -1,13 +1,7 @@
 from flask import Flask, request, jsonify, render_template
-from groq import Groq
-from dotenv import load_dotenv
-import os
 from business import get_ai_reply, get_dashboard_data, get_sales_analytics, get_stock_overview
 
-load_dotenv()
-
 app = Flask(__name__)
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 @app.route("/")
 def home():
